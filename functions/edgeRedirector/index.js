@@ -20,9 +20,13 @@ const Utils = {
   }
 };
 
-// Helper function to hex encode a string
+// Helper function to hex encode a string (Web Standard API)
 function hexEncode(str) {
-  return Buffer.from(str, 'utf8').toString('hex');
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(str);
+  return Array.from(bytes)
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 // Matching functions
@@ -188,7 +192,8 @@ export async function onRequest({ request, params, env }) {
         this.storage.set(key, value);
       }
     };
-    
+    console.log("kvNamespae",kvNamespace)
+    console.log("hexEncodedPath", hexEncodedPath)
     // Access the KV namespace from env
     const kv = env[kvNamespace] || mockKV;
     
