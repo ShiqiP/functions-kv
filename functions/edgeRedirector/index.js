@@ -47,21 +47,21 @@ const matchesPath = (rule, p) => {
 };
 const matchesQuery = (ruleQuery, incomingQuery) => {
   if (!ruleQuery || ruleQuery === "") return true;
-  
+
   const parts = ruleQuery.split('=');
   if (parts.length !== 2) {
     console.error("Rule query format error: Must be key=value.", ruleQuery);
     return false;
   }
-  
+
   const ruleKey = parts[0].trim();
   const ruleValuePattern = parts[1].trim();
-  
+
   if (!incomingQuery || incomingQuery === "") return false;
-  
+
   const params = new URLSearchParams(incomingQuery);
   if (!params.has(ruleKey)) return false;
-  
+
   const incomingValues = params.getAll(ruleKey);
   for (const value of incomingValues) {
     if (ruleValuePattern === "*" && value.length === 0) continue;
@@ -73,7 +73,7 @@ const matchesQuery = (ruleQuery, incomingQuery) => {
 const processRegexMatch = (rule, url) => {
   let regexPattern = rule.regex;
   const cleanPattern = regexPattern.replace(/\\\//g, '/');
-  
+
   let regex;
   try {
     regex = new RegExp(cleanPattern);
@@ -81,16 +81,16 @@ const processRegexMatch = (rule, url) => {
     console.error("Invalid regex pattern provided:", cleanPattern, e);
     return null;
   }
-  
+
   const match = url.match(regex);
   if (!match) return null;
-  
+
   let finalRedirectURL = rule.redirectURL;
   for (let i = 1; i < match.length; i++) {
     const placeholder = new RegExp(`\\\\${i}`, 'g');
     finalRedirectURL = finalRedirectURL.replace(placeholder, match[i] || '');
   }
-  
+
   if (String(rule.useIncomingQueryString) === '1') {
     const queryIndex = url.indexOf('?');
     if (queryIndex !== -1) {
@@ -98,7 +98,7 @@ const processRegexMatch = (rule, url) => {
       finalRedirectURL += queryString;
     }
   }
-  
+
   return finalRedirectURL;
 };
 
@@ -106,17 +106,23 @@ export async function onRequest({ request, params, env }) {
   try {
     // Parse input from query params or POST body
     let requestURL, policyID;
-    
     if (request.method === 'POST') {
       const body = await request.json();
       requestURL = body.requestURL;
       policyID = body.policyID;
     } else {
-      const url = new URL(request.url);
+      // Handle both absolute and relative URLs
+      let url;
+      try {
+        url = new URL(request.url);
+      } catch (e) {
+        // If request.url is relative, create a URL with a base
+        url = new URL(request.url, 'http://localhost');
+      }
       requestURL = url.searchParams.get('requestURL');
       policyID = url.searchParams.get('policyID');
     }
-    
+
     if (!requestURL || !policyID) {
       return new Response(
         JSON.stringify({
@@ -131,20 +137,20 @@ export async function onRequest({ request, params, env }) {
         }
       );
     }
-    
+
     // Parse the request URL first
     const urlObj = new URL(requestURL);
     const scheme = urlObj.protocol.replace(':', '');
     const host = urlObj.hostname.toLowerCase();
     const path = urlObj.pathname;
     const query = urlObj.search.substring(1); // Remove leading '?'
-    
+
     // Hex encode the path - this will be the KV key
     const hexEncodedPath = hexEncode(path);
-    
+
     // Get the KV namespace binding for this policy
     const kvNamespace = `ER_${policyID}`;
-    
+
     // Use mock KV for development if the namespace is not available
     const mockKV = {
       storage: new Map([
@@ -192,21 +198,78 @@ export async function onRequest({ request, params, env }) {
         this.storage.set(key, value);
       }
     };
-    console.log("kvNamespae",kvNamespace)
-    console.log("hexEncodedPath", hexEncodedPath)
     // Access the KV namespace from env
     const kv = env[kvNamespace] || mockKV;
+
+    // Step 1: Check if there's a full policy array stored with key "policy"
+    let matchedRule = null;
+    let redirectURL = null;
     
-    // Retrieve the rule using hex-encoded path as the key
-    const ruleData = await kv.get(hexEncodedPath);
+    const policyData = await kv.get('policy');
     
-    if (!ruleData) {
+    if (policyData) {
+      // Policy array exists - traverse it like in edgeRediretor.js
+      try {
+        const rules = JSON.parse(policyData);
+        
+        if (Array.isArray(rules) && rules.length > 0) {
+          // Traverse all rules to find a match
+          for (let index = 0; index < rules.length; index++) {
+            let rule = rules[index];
+
+            if (rule.disabled) continue;
+            if (!matchesURL(rule, requestURL)) continue;
+            if (!matchesScheme(rule, scheme)) continue;
+            if (!matchesHost(rule, host)) continue;
+            if (!matchesPath(rule, path)) continue;
+            if (!matchesQuery(rule.query, query)) continue;
+
+            // Found a matching rule
+            if (rule.regex) {
+              redirectURL = processRegexMatch(rule, requestURL);
+              if (!redirectURL) continue;
+            }
+
+            redirectURL = redirectURL || rule.redirectURL;
+            if (!redirectURL) continue;
+
+            matchedRule = rule;
+            break;
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing policy array:', e);
+      }
+    }
+    
+    // Step 2: If no policy or no match found, try hex-encoded path lookup
+    if (!matchedRule) {
+      const ruleData = await kv.get(hexEncodedPath);
+      
+      if (ruleData) {
+        try {
+          matchedRule = JSON.parse(ruleData);
+          
+          // Process the rule
+          if (matchedRule.regex) {
+            redirectURL = processRegexMatch(matchedRule, requestURL);
+          }
+          redirectURL = redirectURL || matchedRule.redirectURL;
+        } catch (e) {
+          console.error('Error parsing rule data:', e);
+        }
+      }
+    }
+
+    // Step 3: If still no rule found, return 404
+    if (!matchedRule || !redirectURL) {
       return new Response(
         JSON.stringify({
           error: `No redirect rule found for the given path`,
           kvNamespace: kvNamespace,
           hexEncodedPath: hexEncodedPath,
-          originalPath: path
+          originalPath: path,
+          message: policyData ? 'Policy exists but no matching rule found' : 'No policy or individual rule found'
         }),
         {
           status: 404,
@@ -217,57 +280,32 @@ export async function onRequest({ request, params, env }) {
         }
       );
     }
-    
-    // Parse the rule object
-    const rule = JSON.parse(ruleData);
-    let redirectURL = null;
-    
-    if (rule.regex) {
-      redirectURL = processRegexMatch(rule, requestURL);
-    }
-    
-    redirectURL = redirectURL || rule.redirectURL;
-    
-    if (!redirectURL) {
-      return new Response(
-        JSON.stringify({
-          status_code: 200,
-          redirectURL: null,
-          message: 'Rule found but no redirect URL generated'
-        }),
-        {
-          headers: {
-            'content-type': 'application/json; charset=UTF-8',
-            'Access-Control-Allow-Origin': '*',
-          },
-        }
-      );
-    }
-    
-    // Build final redirect URL
+
+    // Step 4: Build final redirect URL
     let redirectObj;
     try {
       redirectObj = new URL(redirectURL);
     } catch (e) {
       redirectObj = new URL(redirectURL, `${scheme}://${host}`);
     }
-    
+
     let finalProtocol = redirectObj.protocol || `${scheme}:`;
     let finalHost = redirectObj.hostname || host;
     let finalPath = redirectObj.pathname;
-    let finalSearch = String(rule.useIncomingQueryString) === '1' && query && !redirectURL.includes('?') 
-      ? `?${query}` 
+    let finalSearch = String(matchedRule.useIncomingQueryString) === '1' && query && !redirectURL.includes('?')
+      ? `?${query}`
       : redirectObj.search;
-    
-    let statusCode = parseInt(rule.statusCode, 10) || 302;
+
+    let statusCode = parseInt(matchedRule.statusCode, 10) || 302;
     let finalRedirectURL = `${finalProtocol}//${finalHost}${finalPath}${finalSearch}`;
-    
+
     return new Response(
       JSON.stringify({
         status_code: statusCode,
         redirectURL: finalRedirectURL,
-        matchedRule: rule.ruleName || 'unnamed',
-        hexEncodedPath: hexEncodedPath
+        matchedRule: matchedRule.ruleName || 'unnamed',
+        hexEncodedPath: hexEncodedPath,
+        lookupMethod: policyData ? 'policy_array' : 'hex_encoded_path'
       }),
       {
         headers: {
@@ -276,7 +314,7 @@ export async function onRequest({ request, params, env }) {
         },
       }
     );
-    
+
   } catch (err) {
     console.error('EdgeRedirector API error:', err);
     return new Response(

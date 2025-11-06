@@ -79,7 +79,7 @@ export default function KVManager() {
     setMessage(null);
 
     try {
-      const response = await fetch('/api/kv-manager', {
+      const response = await fetch('/kv-manager', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

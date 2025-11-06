@@ -1,6 +1,8 @@
 export async function onRequest({ request, params, env }) {
   try {
     const visitCount = await my_kv.get('visitCount');
+    console.log("visitCount",visitCount);
+    console.log("psq");
     let visitCountInt = Number(visitCount);
     visitCountInt += 1;
     await my_kv.put('visitCount', visitCountInt.toString());
