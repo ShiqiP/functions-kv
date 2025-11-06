@@ -149,7 +149,7 @@ export default function KVManager() {
               className="font-mono text-sm"
             />
             <p className="text-sm text-muted-foreground">
-              Paste a JSON array of redirect rules. Each rule must have a "path" field.
+              Paste a JSON array of redirect rules. Each rule must have a &quot;path&quot; field.
             </p>
           </div>
 
