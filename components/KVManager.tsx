@@ -307,16 +307,26 @@ export default function KVManager() {
           </Select>
         </div>
 
+        {/* Loading Indicator */}
+        {loadingPolicies && (
+          <div className="flex items-center justify-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+            <div className="flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span className="text-sm text-blue-600 dark:text-blue-400">Loading policies...</span>
+            </div>
+          </div>
+        )}
+
         {/* JSON Input */}
         <div className="space-y-2">
           <Label htmlFor="json">Redirect Rules (JSON Array)</Label>
           <Textarea
             id="json"
-            placeholder={`With path field (individual keys):\n[\n  {\n    "path": "/reservation/lookupReservation.mi",\n    "redirectURL": "/reservation/findReservationDetail.mi",\n    "statusCode": 302\n  }\n]\n\nWithout path field (policy array):\n[\n  {\n    "ruleName": "rule1",\n    "redirectURL": "/page1",\n    "statusCode": 302\n  }\n]`}
             value={jsonInput}
             onChange={(e) => setJsonInput(e.target.value)}
             rows={20}
             className="font-mono text-sm"
+            disabled={loadingPolicies}
           />
           {hasChanges && (
             <p className="text-sm text-orange-600 font-medium">
@@ -335,7 +345,7 @@ export default function KVManager() {
         {/* Submit Button */}
         <Button 
           onClick={handleSubmit} 
-          disabled={loading || !hasChanges}
+          disabled={loading || loadingPolicies || !hasChanges}
           className="w-full"
         >
           {loading ? 'Saving...' : hasChanges ? 'Save Changes' : 'No Changes to Save'}
