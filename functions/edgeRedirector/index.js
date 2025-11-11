@@ -90,7 +90,7 @@ const processRegexMatch = (rule, url) => {
   }
 
   if (!match && url.endsWith('/')) {
-    match = url.slice(0, -1).mathc(regex);
+    match = url.slice(0, -1).match(regex);
   }
 
 
@@ -146,7 +146,6 @@ export async function onRequest({ request, params, env }) {
       requestURL = url.searchParams.get('requestURL');
       policyID = url.searchParams.get('policyID');
     }
-
     if (!requestURL || !policyID) {
       return new Response(
         JSON.stringify({
@@ -173,7 +172,7 @@ export async function onRequest({ request, params, env }) {
     const hexEncodedPath = hexEncode(path);
 
     // look up the ER policy ID
-    const ER_ID = await lookupPolicy(policyID) + 0
+    const ER_ID = await lookupPolicy(policyID)
 
 
     // Check if there's a full policy array stored with key "policy", otherwise get rule via hexEncodedPath
@@ -183,46 +182,45 @@ export async function onRequest({ request, params, env }) {
     let ruleData = null;
 
     switch (ER_ID) {
-      case 1:
-        policyData = ER_1.get('policy');
-        ruleData = ER_1.get(hexEncodedPath)
+      case '1':
+        policyData = await ER_1.get('policy');
+        ruleData = await ER_1.get(hexEncodedPath)
         break;
-      case 2:
-        policyData = ER_2.get('policy');
-        ruleData = ER_2.get(hexEncodedPath)
+      case '2':
+        policyData = await ER_2.get('policy');
+        ruleData = await ER_2.get(hexEncodedPath)
         break;
-      case 3:
-        policyData = ER_3.get('policy');
-        ruleData = ER_3.get(hexEncodedPath)
+      case '3':
+        policyData = await ER_3.get('policy');
+        ruleData = await ER_3.get(hexEncodedPath)
         break;
-      case 4:
-        policyData = ER_4.get('policy');
-        ruleData = ER_4.get(hexEncodedPath)
+      case '4':
+        policyData = await ER_4.get('policy');
+        ruleData = await ER_4.get(hexEncodedPath)
         break;
-      case 5:
-        policyData = ER_5.get('policy');
-        ruleData = ER_5.get(hexEncodedPath)
+      case '5':
+        policyData = await ER_5.get('policy');
+        ruleData = await ER_5.get(hexEncodedPath)
         break;
-      case 6:
-        policyData = ER_6.get('policy');
-        ruleData = ER_6.get(hexEncodedPath)
+      case '6':
+        policyData = await ER_6.get('policy');
+        ruleData = await ER_6.get(hexEncodedPath)
         break;
-      case 7:
-        policyData = ER_7.get('policy');
-        ruleData = ER_7.get(hexEncodedPath)
+      case '7':
+        policyData = await ER_7.get('policy');
+        ruleData = await ER_7.get(hexEncodedPath)
         break;
-      case 8:
-        policyData = ER_8.get('policy');
-        ruleData = ER_8.get(hexEncodedPath)
+      case '8':
+        policyData = await ER_8.get('policy');
+        ruleData = await ER_8.get(hexEncodedPath)
         break;
-      case 9:
-        policyData = ER_9.get('policy');
-        ruleData = ER_9.get(hexEncodedPath)
+      case '9':
+        policyData = await ER_9.get('policy');
+        ruleData = await R_9.get(hexEncodedPath)
         break;
       default:
         break;
     }
-
     // policy exist, travese through all the rule
     if (policyData) {
       // Policy array exists - traverse it like in edgeRediretor.js
@@ -281,7 +279,6 @@ export async function onRequest({ request, params, env }) {
       return new Response(
         JSON.stringify({
           error: `No redirect rule found for the given path`,
-          kvNamespace: kvNamespace,
           hexEncodedPath: hexEncodedPath,
           originalPath: path,
           message: policyData ? 'Policy exists but no matching rule found' : 'No policy or individual rule found'
