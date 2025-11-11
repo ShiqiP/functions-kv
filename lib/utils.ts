@@ -19,3 +19,4 @@ export function getVisitCount() {
       return data.visitCount;
     });
 }
+

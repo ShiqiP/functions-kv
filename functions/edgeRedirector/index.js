@@ -82,7 +82,18 @@ const processRegexMatch = (rule, url) => {
     return null;
   }
 
-  const match = url.match(regex);
+
+  let match = url.match(regex);
+
+  if (!match && !url.endsWith('/')) {
+    match = (url + '/').match(regex);
+  }
+
+  if (!match && url.endsWith('/')) {
+    match = url.slice(0, -1).mathc(regex);
+  }
+
+
   if (!match) return null;
 
   let finalRedirectURL = rule.redirectURL;
@@ -101,6 +112,19 @@ const processRegexMatch = (rule, url) => {
 
   return finalRedirectURL;
 };
+
+async function lookupPolicy(policyID) {
+  // const policyID = 278664
+  const result = await ER_lookup.list({});
+  const keys = result.keys;
+
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i].key;
+    const value = await ER_lookup.get(key);
+    if (value == policyID) return key;
+  }
+  return null
+}
 
 export async function onRequest({ request, params, env }) {
   try {
@@ -148,70 +172,63 @@ export async function onRequest({ request, params, env }) {
     // Hex encode the path - this will be the KV key
     const hexEncodedPath = hexEncode(path);
 
-    // Get the KV namespace binding for this policy
-    const kvNamespace = `ER_${policyID}`;
+    // look up the ER policy ID
+    const ER_ID = await lookupPolicy(policyID) + 0
 
-    // Use mock KV for development if the namespace is not available
-    const mockKV = {
-      storage: new Map([
-        // /reservation/lookupReservation.mi
-        [hexEncode('/reservation/lookupReservation.mi'), JSON.stringify({
-          "ruleName": "/reservation/findReservationDetail.mi",
-          "header": "",
-          "path": "/reservation/lookupReservation.mi",
-          "query": "r=*",
-          "regex": "",
-          "useIncomingQueryString": 1,
-          "useRelativeUrl": "relative_url",
-          "redirectURL": "/reservation/findReservationDetail.mi",
-          "statusCode": 302
-        })],
-        // /reservation/upgradeReservation.mi
-        [hexEncode('/reservation/upgradeReservation.mi'), JSON.stringify({
-          "ruleName": "/phoenix-reservation/upsell/v1/upgradeReservation",
-          "header": "",
-          "path": "/reservation/upgradeReservation.mi",
-          "query": "r=*",
-          "regex": "",
-          "useIncomingQueryString": 1,
-          "useRelativeUrl": "relative_url",
-          "redirectURL": "/phoenix-reservation/upsell/v1/upgradeReservation",
-          "statusCode": 302
-        })],
-        // /search/submitSearch.mi
-        [hexEncode('/search/submitSearch.mi'), JSON.stringify({
-          "ruleName": "/search/findHotels.mi",
-          "header": "",
-          "path": "/search/submitSearch.mi",
-          "query": "",
-          "regex": "",
-          "useIncomingQueryString": 1,
-          "useRelativeUrl": "relative_url",
-          "redirectURL": "/search/findHotels.mi",
-          "statusCode": 302
-        })]
-      ]),
-      async get(key) {
-        return this.storage.get(key) || null;
-      },
-      async put(key, value) {
-        this.storage.set(key, value);
-      }
-    };
-    // Access the KV namespace from env
-    const kv = env[kvNamespace] || mockKV;
 
-    // Step 1: Check if there's a full policy array stored with key "policy"
+    // Check if there's a full policy array stored with key "policy", otherwise get rule via hexEncodedPath
     let matchedRule = null;
     let redirectURL = null;
-    
-    const policyData = await kv.get('policy');
-    
+    let policyData = null;
+    let ruleData = null;
+
+    switch (ER_ID) {
+      case 1:
+        policyData = ER_1.get('policy');
+        ruleData = ER_1.get(hexEncodedPath)
+        break;
+      case 2:
+        policyData = ER_2.get('policy');
+        ruleData = ER_2.get(hexEncodedPath)
+        break;
+      case 3:
+        policyData = ER_3.get('policy');
+        ruleData = ER_3.get(hexEncodedPath)
+        break;
+      case 4:
+        policyData = ER_4.get('policy');
+        ruleData = ER_4.get(hexEncodedPath)
+        break;
+      case 5:
+        policyData = ER_5.get('policy');
+        ruleData = ER_5.get(hexEncodedPath)
+        break;
+      case 6:
+        policyData = ER_6.get('policy');
+        ruleData = ER_6.get(hexEncodedPath)
+        break;
+      case 7:
+        policyData = ER_7.get('policy');
+        ruleData = ER_7.get(hexEncodedPath)
+        break;
+      case 8:
+        policyData = ER_8.get('policy');
+        ruleData = ER_8.get(hexEncodedPath)
+        break;
+      case 9:
+        policyData = ER_9.get('policy');
+        ruleData = ER_9.get(hexEncodedPath)
+        break;
+      default:
+        break;
+    }
+
+    // policy exist, travese through all the rule
     if (policyData) {
       // Policy array exists - traverse it like in edgeRediretor.js
       try {
         const rules = JSON.parse(policyData);
-        
+
         if (Array.isArray(rules) && rules.length > 0) {
           // Traverse all rules to find a match
           for (let index = 0; index < rules.length; index++) {
@@ -241,15 +258,13 @@ export async function onRequest({ request, params, env }) {
         console.error('Error parsing policy array:', e);
       }
     }
-    
-    // Step 2: If no policy or no match found, try hex-encoded path lookup
+
+    // Step 2: If no policy or no match found, ruleData
     if (!matchedRule) {
-      const ruleData = await kv.get(hexEncodedPath);
-      
       if (ruleData) {
         try {
           matchedRule = JSON.parse(ruleData);
-          
+
           // Process the rule
           if (matchedRule.regex) {
             redirectURL = processRegexMatch(matchedRule, requestURL);
@@ -278,6 +293,7 @@ export async function onRequest({ request, params, env }) {
             'Access-Control-Allow-Origin': '*',
           },
         }
+
       );
     }
 
