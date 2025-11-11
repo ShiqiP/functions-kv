@@ -215,6 +215,17 @@ export default function KVManager() {
           };
         });
 
+        // Find deleted rules by comparing with original policies
+        const keysToDelete: string[] = [];
+        if (policies.length > 0) {
+          const newPaths = new Set(rules.map(rule => rule.path));
+          policies.forEach(oldRule => {
+            if (oldRule.path && !newPaths.has(oldRule.path)) {
+              keysToDelete.push(hexEncode(oldRule.path));
+            }
+          });
+        }
+
         const response = await fetch('/kv-manager', {
           method: 'POST',
           headers: {
@@ -222,16 +233,18 @@ export default function KVManager() {
           },
           body: JSON.stringify({
             namespace: namespace.trim(),
-            entries
+            entries,
+            keysToDelete
           }),
         });
 
         const data = await response.json();
 
         if (response.ok) {
+          const deletedMsg = keysToDelete.length > 0 ? `, deleted ${keysToDelete.length} old rules` : '';
           setMessage({ 
             type: 'success', 
-            text: `Successfully added ${rules.length} individual rules to ER_${namespace}` 
+            text: `Successfully added/updated ${rules.length} individual rules to ER_${namespace}${deletedMsg}` 
           });
           // Reload policies and update original
           await loadPolicies(namespace);

@@ -29,46 +29,36 @@ export async function onRequest({ request, params, env }) {
         );
       }
 
-      // Get policy data based on namespace
-      let policyData = null;
+      // First, list all keys to check for individual entries
       let result = null;
       
       switch (namespace) {
         case '1':
-          policyData = await ER_1.get('policy');
-          if (!policyData) result = await ER_1.list({});
+          result = await ER_1.list({});
           break;
         case '2':
-          policyData = await ER_2.get('policy');
-          if (!policyData) result = await ER_2.list({});
+          result = await ER_2.list({});
           break;
         case '3':
-          policyData = await ER_3.get('policy');
-          if (!policyData) result = await ER_3.list({});
+          result = await ER_3.list({});
           break;
         case '4':
-          policyData = await ER_4.get('policy');
-          if (!policyData) result = await ER_4.list({});
+          result = await ER_4.list({});
           break;
         case '5':
-          policyData = await ER_5.get('policy');
-          if (!policyData) result = await ER_5.list({});
+          result = await ER_5.list({});
           break;
         case '6':
-          policyData = await ER_6.get('policy');
-          if (!policyData) result = await ER_6.list({});
+          result = await ER_6.list({});
           break;
         case '7':
-          policyData = await ER_7.get('policy');
-          if (!policyData) result = await ER_7.list({});
+          result = await ER_7.list({});
           break;
         case '8':
-          policyData = await ER_8.get('policy');
-          if (!policyData) result = await ER_8.list({});
+          result = await ER_8.list({});
           break;
         case '9':
-          policyData = await ER_9.get('policy');
-          if (!policyData) result = await ER_9.list({});
+          result = await ER_9.list({});
           break;
         default:
           return new Response(
@@ -83,9 +73,111 @@ export async function onRequest({ request, params, env }) {
           );
       }
 
-      // First, check if there's a 'policy' key
+      // First priority: Check for individual hex-encoded path entries (excluding 'policy' key)
+      if (result && result.keys && result.keys.length > 0) {
+        const keys = result.keys;
+        const nonPolicyKeys = keys.filter(k => k.key !== 'policy');
+        
+        // If there are keys other than 'policy', treat them as individual entries
+        if (nonPolicyKeys.length > 0) {
+          const policies = [];
+
+          for (let i = 0; i < nonPolicyKeys.length; i++) {
+            const key = nonPolicyKeys[i].key;
+            
+            let value = null;
+            switch (namespace) {
+              case '1':
+                value = await ER_1.get(key);
+                break;
+              case '2':
+                value = await ER_2.get(key);
+                break;
+              case '3':
+                value = await ER_3.get(key);
+                break;
+              case '4':
+                value = await ER_4.get(key);
+                break;
+              case '5':
+                value = await ER_5.get(key);
+                break;
+              case '6':
+                value = await ER_6.get(key);
+                break;
+              case '7':
+                value = await ER_7.get(key);
+                break;
+              case '8':
+                value = await ER_8.get(key);
+                break;
+              case '9':
+                value = await ER_9.get(key);
+                break;
+            }
+            
+            if (value) {
+              try {
+                const parsedValue = JSON.parse(value);
+                policies.push(parsedValue);
+              } catch (e) {
+                console.error(`Error parsing value for key ${key}:`, e);
+              }
+            }
+          }
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              namespace,
+              hasPolicy: false,
+              policies,
+              count: policies.length
+            }),
+            {
+              headers: {
+                'content-type': 'application/json; charset=UTF-8',
+                'Access-Control-Allow-Origin': '*',
+              },
+            }
+          );
+        }
+      }
+
+      // Second priority: Check for 'policy' key
+      let policyData = null;
+      switch (namespace) {
+        case '1':
+          policyData = await ER_1.get('policy');
+          break;
+        case '2':
+          policyData = await ER_2.get('policy');
+          break;
+        case '3':
+          policyData = await ER_3.get('policy');
+          break;
+        case '4':
+          policyData = await ER_4.get('policy');
+          break;
+        case '5':
+          policyData = await ER_5.get('policy');
+          break;
+        case '6':
+          policyData = await ER_6.get('policy');
+          break;
+        case '7':
+          policyData = await ER_7.get('policy');
+          break;
+        case '8':
+          policyData = await ER_8.get('policy');
+          break;
+        case '9':
+          policyData = await ER_9.get('policy');
+          break;
+      }
+
       if (policyData) {
-        // Policy exists, return it
+        // Policy key exists, return it
         try {
           const policies = JSON.parse(policyData);
           return new Response(
@@ -108,73 +200,6 @@ export async function onRequest({ request, params, env }) {
         }
       }
 
-      // No policy key, traverse all entries
-      if (result && result.keys && result.keys.length > 0) {
-        const keys = result.keys;
-        const policies = [];
-
-        for (let i = 0; i < keys.length; i++) {
-          const key = keys[i].key;  // Fixed: was keys[i].name
-          if (key === 'policy') continue; // Skip the policy key itself
-          
-          let value = null;
-          switch (namespace) {
-            case '1':
-              value = await ER_1.get(key);
-              break;
-            case '2':
-              value = await ER_2.get(key);
-              break;
-            case '3':
-              value = await ER_3.get(key);
-              break;
-            case '4':
-              value = await ER_4.get(key);
-              break;
-            case '5':
-              value = await ER_5.get(key);
-              break;
-            case '6':
-              value = await ER_6.get(key);
-              break;
-            case '7':
-              value = await ER_7.get(key);
-              break;
-            case '8':
-              value = await ER_8.get(key);
-              break;
-            case '9':
-              value = await ER_9.get(key);
-              break;
-          }
-          
-          if (value) {
-            try {
-              const parsedValue = JSON.parse(value);
-              policies.push(parsedValue);
-            } catch (e) {
-              console.error(`Error parsing value for key ${key}:`, e);
-            }
-          }
-        }
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            namespace,
-            hasPolicy: false,
-            policies,
-            count: policies.length
-          }),
-          {
-            headers: {
-              'content-type': 'application/json; charset=UTF-8',
-              'Access-Control-Allow-Origin': '*',
-            },
-          }
-        );
-      }
-
       // If we reach here, no data found at all
       return new Response(
         JSON.stringify({
@@ -194,7 +219,7 @@ export async function onRequest({ request, params, env }) {
 
     } else if (request.method === 'POST') {
       // Add entries to KV storage
-      const { namespace, entries } = await request.json();
+      const { namespace, entries, keysToDelete } = await request.json();
 
       if (!namespace || typeof namespace !== 'string') {
         return new Response(
@@ -235,6 +260,57 @@ export async function onRequest({ request, params, env }) {
               },
             }
           );
+        }
+      }
+
+      // Delete old keys if provided
+      const deleteResults = [];
+      if (Array.isArray(keysToDelete) && keysToDelete.length > 0) {
+        for (const key of keysToDelete) {
+          try {
+            switch (namespace) {
+              case '1':
+                await ER_1.delete(key);
+                deleteResults.push({ key, status: 'deleted' });
+                break;
+              case '2':
+                await ER_2.delete(key);
+                deleteResults.push({ key, status: 'deleted' });
+                break;
+              case '3':
+                await ER_3.delete(key);
+                deleteResults.push({ key, status: 'deleted' });
+                break;
+              case '4':
+                await ER_4.delete(key);
+                deleteResults.push({ key, status: 'deleted' });
+                break;
+              case '5':
+                await ER_5.delete(key);
+                deleteResults.push({ key, status: 'deleted' });
+                break;
+              case '6':
+                await ER_6.delete(key);
+                deleteResults.push({ key, status: 'deleted' });
+                break;
+              case '7':
+                await ER_7.delete(key);
+                deleteResults.push({ key, status: 'deleted' });
+                break;
+              case '8':
+                await ER_8.delete(key);
+                deleteResults.push({ key, status: 'deleted' });
+                break;
+              case '9':
+                await ER_9.delete(key);
+                deleteResults.push({ key, status: 'deleted' });
+                break;
+              default:
+                break;
+            }
+          } catch (err) {
+            deleteResults.push({ key, status: 'failed', error: err.message });
+          }
         }
       }
 
@@ -293,7 +369,8 @@ export async function onRequest({ request, params, env }) {
           success: true,
           namespace,
           message: `Successfully added to ER_${namespace}"`,
-          results
+          results,
+          deleteResults: deleteResults.length > 0 ? deleteResults : undefined
         }),
         {
           headers: {
